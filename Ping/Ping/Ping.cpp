@@ -1,16 +1,18 @@
 #include "Ping.h"
 USHORT Ping::seq = 0;
-
+#define block false;
 Ping::Ping() :
-	icmpLen(0)
+	icmpLen(sizeof(ICMPHead)+ping::DATASIZE)
 {
 	this->reply = std::make_shared<PingReply>();
+	this->pktCreator = std::make_shared<ICMPPacketCreator>(icmpLen);
 }
 
 void Ping::init() throw(InitFailException)
 {
 	WSADATA wsaData;
 	int optVal = ping::TIMEOUT;
+
 	//⑴ wVersionRequested：一个WORD（双字节）型数值，
 	//在最高版本的Windows Sockets支持调用者使用，
 	//高阶字节指定小版本(修订本)号, 低位字节指定主版本号。
@@ -21,6 +23,7 @@ void Ping::init() throw(InitFailException)
 		qDebug() << "WSAStartup failed"<< endl;
 		throw InitFailException(QString((LONG)GetLastError()));
 	}
+
 	//SOCKET WSASocket(int af,int type,int protocol,LPWSAPROTOCOL_INFO lpProtocolInfo,
 	//	GROUP g,DWORD dwFlags);其功能都是创建一个原始套接字。
 	//af：[in]一个地址族规范。目前仅支持AF_INET格式，亦即ARPA Internet地址格式。
@@ -32,7 +35,6 @@ void Ping::init() throw(InitFailException)
 	//iFlags：套接口属性描述。
 	//@return:若无错误发生，WSASocket()返回新套接口的描述字。
 	//否则的话，返回 INVALID_SOCKET，应用程序可定调用WSAGetLastError()来获取相应的错误代码。
-	
 	//this->sockRaw = WSASocket(AF_INET, SOCK_RAW, IPPROTO_ICMP, NULL, 0, 0);
 	this->sockRaw = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if (this->sockRaw == INVALID_SOCKET)
@@ -41,7 +43,8 @@ void Ping::init() throw(InitFailException)
 		throw InitFailException(QString(WSAGetLastError()));
 	}
 	int bread = 0;
-#if 0
+
+#if 0		//部分机器上需要以下代码
 	optVal = 1;
 	bread = setsockopt(sockRaw, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
 		(char *)&optVal, sizeof(optVal));
@@ -57,7 +60,8 @@ void Ping::init() throw(InitFailException)
 		throw InitFailException(QString(WSAGetLastError()));
 	}
 #endif
-	optVal = 1000;
+
+	optVal = ping::TIMEOUT;
 	bread = setsockopt(this->sockRaw, SOL_SOCKET, 
 		SO_RCVTIMEO, (char*) &optVal, sizeof(optVal));
 	if (bread == SOCKET_ERROR)
@@ -66,7 +70,7 @@ void Ping::init() throw(InitFailException)
 		throw InitFailException(QString(WSAGetLastError()));
 	}
 
-	optVal = 1000;
+	optVal = ping::TIMEOUT;
 	bread = setsockopt(this->sockRaw, SOL_SOCKET,
 		SO_SNDTIMEO, (char*) & optVal, sizeof(optVal));
 	if (bread == SOCKET_ERROR) {
@@ -75,8 +79,9 @@ void Ping::init() throw(InitFailException)
 	}
 
 	//将socket和事件关联并注册到系统，并将socket设置成非阻塞模式。
-	//WSAEventSelect(this->sockRaw, this->event, FD_READ);
-	pktCreator = std::make_shared<ICMPPacketCreator>(ping::ECHO_REQUEST);
+#if block
+	WSAEventSelect(this->sockRaw, this->event, FD_READ);
+#endif
 }
 
 void Ping::ping(char * destIP,int count = 4)
@@ -89,23 +94,23 @@ void Ping::ping(DWORD destIP,int count = 4)
 {
 	//配置socket
 	init();
-
-	try {
-		pktCreator->initPacket(NULL, ping::DATA,
-		ping::DATASIZE, this->packet, this->icmpLen);
-	}
-	catch (InitPacketFailExceptiom ipfe) {
-		exit(-1);//直接退出
-	}
-
 	sockaddr_in dest;
 	dest.sin_family = AF_INET;
 	dest.sin_addr.s_addr = destIP;
 	int addrSize = sizeof(dest);
+	CurrentProcID = GetCurrentProcessId();
 
+	pktCreator
+		->setPktSize(sizeof(ICMPHead) + ping::DATASIZE)
+		->setCode(ping::ECHO_REQUEST)
+		->setData(ping::DATA, ping::DATASIZE)
+		->setId(CurrentProcID)
+		->setType(ping::ECHO_REQUEST)
+		->getPacket();
 
 	while (count--) {
 		LONGLONG startClock = clock();
+		pktCreator->setSeq(++seq);
 		BOOL sendSucc = sendICMP((sockaddr*)&dest, addrSize);
 		if (sendSucc)
 		{
@@ -118,7 +123,7 @@ void Ping::ping(DWORD destIP,int count = 4)
 			qDebug() << "send failed" << endl;
 			continue;
 		}
-		Sleep(100);
+		Sleep(1000);
 	}
 	closesocket(sockRaw);
 	WSACleanup();
@@ -139,9 +144,9 @@ BOOL Ping::sendICMP(sockaddr * destaddr, int addrSize)
 	//Flags 调用方式标志位, 一般为0, 改变Flags，将会改变Sendto发送的形式
 	//addr （可选）指针，指向目的套接字的地址
 	//addrLen 地址的长度
-	auto icmpHead = (ICMPHead*)packet;
-	icmpHead->seqNum = ++seq;
-	int bread = sendto(this->sockRaw, this->packet, 
+	this->CurrentProcID = GetCurrentProcessId();
+	char* data = pktCreator->getPacket();
+	int bread = sendto(this->sockRaw, data, 
 		this->icmpLen,0, destaddr, addrSize);
 	if (bread == SOCKET_ERROR)
 	{
@@ -160,40 +165,45 @@ BOOL Ping::recvPacket(sockaddr * from, int fromlen)
 	BOOL res = TRUE;
 	char recvbuf[ping::MAXPACKETLEN];
 	int timeout = ping::TIMEOUT;
+#if block
 	if (WSAWaitForMultipleEvents(1, &event, FALSE, timeout, FALSE) != WSA_WAIT_TIMEOUT) 
 	{
-		int recvLen = recvfrom(sockRaw, recvbuf, ping::MAXPACKETLEN, 
-			0,(struct sockaddr*)&from, &fromlen);
-		if (recvLen == SOCKET_ERROR)
-		{				
-			res = FALSE;
-			if (WSAGetLastError() == WSAETIMEDOUT)
+		WSANETWORKEVENTS netEvent;
+		WSAEnumNetworkEvents(this->sockRaw, this->event, &netEvent);
+		if (netEvent.lNetworkEvents & FD_READ) {
+#endif
+			int recvLen = recvfrom(sockRaw, recvbuf, ping::MAXPACKETLEN,
+				0, (struct sockaddr*)&from, &fromlen);
+			if (recvLen == SOCKET_ERROR)
 			{
-				qDebug() << "time out" << endl;
-				return res;
+				res = FALSE;
+				if (WSAGetLastError() == WSAETIMEDOUT)
+				{
+					qDebug() << "time out" << endl;
+					return res;
+				}
+				qDebug() << "revefrom() failed:" << WSAGetLastError() << endl;
 			}
-			qDebug()<<"revefrom() failed:"<< WSAGetLastError()<<endl;
-		}
-		else
-		{
-			IPHead *ipHead = (IPHead*)recvbuf;
-			USHORT ipHeadLen = (USHORT)(ipHead->IHL)* 4;
-			ICMPHead *icmpHead = (ICMPHead*)(recvbuf + ipHeadLen);
-			if (icmpHead->id == this->CurrentProcID      //是当前进程发出的报文
-				&& icmpHead->seqNum == this->seq         //是本次请求报文的响应报文
-				&& icmpHead->type  == ping::ECHO_REPLY)  //是ICMP响应报文
+			else
 			{
-				reply->dataLen = recvLen - sizeof(IPHead) - sizeof(ICMPHead);
-				reply->TTL = ipHead->TTL;
+				IPHead *ipHead = (IPHead*)recvbuf;
+				USHORT ipHeadLen = (USHORT)(ipHead->IHL) * 4;
+				ICMPHead *icmpHead = (ICMPHead*)(recvbuf + ipHeadLen);
+				if (icmpHead->id == this->CurrentProcID      //是当前进程发出的报文
+					&& icmpHead->seqNum == this->seq         //是本次请求报文的响应报文
+					&& icmpHead->type == ping::ECHO_REPLY)  //是ICMP响应报文
+				{
+					reply->dataLen = recvLen - sizeof(IPHead) - sizeof(ICMPHead);
+					reply->TTL = ipHead->TTL;
+				}
 			}
+#if block
 		}
 	}
+#endif
 	return res;
 }
 
 Ping::~Ping()
 {
-	if (packet != nullptr) {
-		delete []packet;
-	}
 }

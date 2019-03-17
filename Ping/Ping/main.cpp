@@ -13,6 +13,6 @@ int main(int argc, char *argv[])
 	//return a.exec();
 	Ping myping;
 	Sleep(1000);
-	char *ip = "192.168.43.1";
-	myping.ping(ip,20);
+	char *ip = "114.114.114.114";
+	myping.ping(ip,6);
 }

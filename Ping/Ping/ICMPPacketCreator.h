@@ -14,11 +14,19 @@ class ICMPPacketCreator :
 	public PacketCreator
 {
 public:
-	ICMPPacketCreator(BYTE type);
-	void initPacket(char*destIP,const char*data,
-		int dataLen, char *&packet, int& totalLen);
+	ICMPPacketCreator();
+	ICMPPacketCreator(int size);
+
+	char* getPacket();
+	PacketCreator* setPktSize(int size);
+	PacketCreator* initPacket();
+	PacketCreator* setSeq(USHORT seq);
+	PacketCreator* setType(BYTE type);
+	PacketCreator* setCode(BYTE code);
+	PacketCreator* setId(USHORT id);
+	PacketCreator* setData(const char *data, int len);
 	~ICMPPacketCreator();
-protected:
-	BYTE type;
+private:
+	ICMPHead* icmpHead;
 };
 

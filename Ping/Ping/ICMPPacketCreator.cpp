@@ -1,35 +1,78 @@
 #include "ICMPPacketCreator.h"
 
-ICMPPacketCreator::ICMPPacketCreator(BYTE _type):
-	type(_type)
+ICMPPacketCreator::ICMPPacketCreator()
 {
 }
 
-void ICMPPacketCreator::initPacket(
-	char * destIP,const char * data,int dataLen, 
-	char *&packet, int& totalLen)
-	throw(InitPacketFailExceptiom)
+ICMPPacketCreator::ICMPPacketCreator(int size)
 {
-	if (totalLen!= sizeof(ICMPHead) + dataLen || packet == nullptr)
-	{
-		totalLen = sizeof(ICMPHead) + dataLen;
-		packet = new char[totalLen];
-	}
+	this->pktSize = size;
+	this->packet = new char[size];
+	this->icmpHead = (ICMPHead*)packet;
+}
 
-	if (packet == nullptr)
-	{
-		qDebug() << "±¨ÎÄ¿Õ¼äÉêÇëÊ§°Ü£¡" << endl;
-		throw InitPacketFailExceptiom(QString("±¨ÎÄ¿Õ¼äÉêÇëÊ§°Ü£¡"));
+char * ICMPPacketCreator::getPacket()
+{
+	icmpHead->checkSum = 0;
+	icmpHead->checkSum = this->checkSum((USHORT*)packet,pktSize);
+	return packet;
+}
+
+PacketCreator * ICMPPacketCreator::setPktSize(int size)
+{
+	if (this->packet != nullptr) {
+		icmpHead = nullptr;
+		delete []packet;
 	}
-	auto pIcmpHead = (ICMPHead*)packet;
-	pIcmpHead->type = type;
-	pIcmpHead->code = 0;
-	pIcmpHead->id  = (USHORT)GetCurrentProcessId();
-	memcpy(packet+sizeof(ICMPHead),data,dataLen);
-	pIcmpHead->checkSum = 0;
-	pIcmpHead->checkSum = checkSum((USHORT*)packet,totalLen/2);
+	this->pktSize = size;
+	this->packet = new char[size];
+	icmpHead = (ICMPHead*)packet;
+	return this;
+}
+
+PacketCreator * ICMPPacketCreator::initPacket()
+{
+	PacketCreator* res = nullptr;
+	if (pktSize > 0)
+	{
+		packet = new char[pktSize];
+		icmpHead = (ICMPHead*)packet;
+		res = this;
+	}
+	return res;
+}
+
+PacketCreator * ICMPPacketCreator::setSeq(USHORT seq)
+{
+	icmpHead->seqNum = seq;
+	return this;
+}
+
+PacketCreator * ICMPPacketCreator::setType(BYTE type)
+{
+	icmpHead->type = type;
+	return this;
+}
+
+PacketCreator * ICMPPacketCreator::setCode(BYTE code)
+{
+	icmpHead->code = code;
+	return this;
+}
+
+PacketCreator * ICMPPacketCreator::setId(USHORT id)
+{
+	icmpHead->id = id;
+	return this;
+}
+
+PacketCreator * ICMPPacketCreator::setData(const char * data, int len)
+{
+	memcpy(packet + sizeof(ICMPHead), data, len);
+	return this;
 }
 
 ICMPPacketCreator::~ICMPPacketCreator()
 {
+	icmpHead = nullptr;
 }

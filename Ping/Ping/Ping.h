@@ -11,9 +11,11 @@ namespace ping {
 	constexpr auto ECHO_REPLY = 0;
 	constexpr auto TIMEOUT = 1000;
 	constexpr auto MAXPACKETLEN = 256;
+
 }
 typedef struct
 {//不包含可选部分
+#ifdef RTP_BIG_ENDIAN
 	BYTE version : 4;        //数据报的IP版本
 	BYTE IHL : 4;            //ip首部长度
 	BYTE TOS;                //服务类型
@@ -21,6 +23,15 @@ typedef struct
 	USHORT  id;              //标识。长数据分组发送时用到
 	USHORT  flag : 3;        //分片相关数据位
 	USHORT  fragOffset : 13; //片偏移，分片相关
+#else
+	BYTE IHL : 4;
+	BYTE version : 4;
+	BYTE TOS; 
+	USHORT  ToltalLen; 
+	USHORT  id;
+	USHORT  fragOffset : 13; 
+	USHORT  flag : 3;
+#endif
 	BYTE TTL;                //寿命。time to live
 	BYTE protocol;           //指定运输协议
 	USHORT checkSum;         //校验和。用于数据校验
@@ -51,7 +62,7 @@ class Ping
 public:
 	Ping();
 	void init();
-	void ping(char*destIP, int count);
+	void ping(char *destIP, int count);
 	void ping(DWORD destIP,int count);
 	BOOL sendICMP(struct sockaddr* destaddr, int addrSize);
 	BOOL recvPacket(struct sockaddr* destaddr, int addrSize);
@@ -67,6 +78,5 @@ private:
 
 	static USHORT seq;
 	USHORT CurrentProcID;
-	char* packet;//由于会强制转换为其他类型的指针。不使用shared_ptr。
 	int icmpLen;
 };
