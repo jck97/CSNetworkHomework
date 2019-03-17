@@ -1,14 +1,18 @@
 #pragma once
 #include <WinSock2.h>
+#include <iostream>
 #include <memory>
-using std::shared_ptr;
+#include <ICMPPacketCreator.h>
 
-constexpr auto DATASIZE = 32;
-constexpr auto DATA = "abcdefghijklmnopqrstuvwabcdefghi";
-constexpr auto ECHO_REQUEST = 8;
-constexpr auto ECHO_REPLY = 0;
-
-typedef struct 
+namespace ping {
+	constexpr auto DATASIZE = 32;
+	constexpr auto DATA = "abcdefghijklmnopqrstuvwabcdefghi";
+	constexpr auto ECHO_REQUEST = 8;
+	constexpr auto ECHO_REPLY = 0;
+	constexpr auto TIMEOUT = 1000;
+	constexpr auto MAXPACKETLEN = 256;
+}
+typedef struct
 {//不包含可选部分
 	BYTE version : 4;        //数据报的IP版本
 	BYTE IHL : 4;            //ip首部长度
@@ -27,20 +31,42 @@ typedef struct
 typedef struct
 {
 	DWORD time;//往返时间
-	DWORD Byte;//接受数据长度
+	DWORD dataLen;//接收数据长度
 	DWORD TTL; //ttl
+	void print() {
+		qDebug() << "cost time:" << time << "ms  data length:" << dataLen << "Byte  TTL:" << TTL;
+	}
 }PingReply;
+
+class InitFailException {
+public:
+	InitFailException(QString _info) :
+		info(_info) {
+	};
+	QString info;
+};
 
 class Ping
 {
 public:
-	Ping(char*destIP,PingReply& reply);
-
-	shared_ptr<PingReply> getReply() {
+	Ping();
+	void init();
+	void ping(char*destIP, int count);
+	void ping(DWORD destIP,int count);
+	BOOL sendICMP(struct sockaddr* destaddr, int addrSize);
+	BOOL recvPacket(struct sockaddr* destaddr, int addrSize);
+	std::shared_ptr<PingReply> getReply() {
 		return reply;
 	};
 	~Ping();
 private:
-	shared_ptr<PingReply> reply;
-};
+	SOCKET sockRaw;
+	WSAEVENT event;
+	std::shared_ptr<PacketCreator> pktCreator;
+	std::shared_ptr<PingReply> reply;
 
+	static USHORT seq;
+	USHORT CurrentProcID;
+	char* packet;//由于会强制转换为其他类型的指针。不使用shared_ptr。
+	int icmpLen;
+};

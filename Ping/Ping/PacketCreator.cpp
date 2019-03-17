@@ -20,9 +20,9 @@ USHORT PacketCreator::checkSum(const USHORT * packet, int n)
 	unsigned int res = 0;
 	for (size_t i = 0; i < n; i++)
 	{
-		res += *packet++;
+		res += packet[i];
 	}
-	res = res >> 16 + (res & 0xffff);
-	res = res >> 16 + (res & 0xffff);
+	res = (res >> 16) + (res & 0xffff);
+	res = (res >> 16) + (res & 0xffff);
 	return (USHORT)res;
 }
