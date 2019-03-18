@@ -35,8 +35,8 @@ void Ping::init() throw(InitFailException)
 	//iFlags：套接口属性描述。
 	//@return:若无错误发生，WSASocket()返回新套接口的描述字。
 	//否则的话，返回 INVALID_SOCKET，应用程序可定调用WSAGetLastError()来获取相应的错误代码。
-	//this->sockRaw = WSASocket(AF_INET, SOCK_RAW, IPPROTO_ICMP, NULL, 0, 0);
-	this->sockRaw = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	this->sockRaw = WSASocket(AF_INET, SOCK_RAW, IPPROTO_ICMP, NULL, 0, 0);
+	//this->sockRaw = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if (this->sockRaw == INVALID_SOCKET)
 	{
 		qDebug() << "create socket failed" << endl;
@@ -127,6 +127,46 @@ void Ping::ping(DWORD destIP,int count = 4)
 	}
 	closesocket(sockRaw);
 	WSACleanup();
+}
+
+bool Ping::isReach(char * destIP)
+{
+	return isReach(inet_addr(destIP));
+}
+
+bool Ping::isReach(DWORD destIP)
+{
+	bool res = false;
+	init();
+	sockaddr_in dest;
+	dest.sin_family = AF_INET;
+	dest.sin_addr.s_addr = destIP;
+	int addrSize = sizeof(dest);
+	CurrentProcID = GetCurrentProcessId();
+
+	pktCreator
+		->setPktSize(sizeof(ICMPHead) + ping::DATASIZE)
+		->setCode(ping::ECHO_REQUEST)
+		->setData(ping::DATA, ping::DATASIZE)
+		->setId(CurrentProcID)
+		->setType(ping::ECHO_REQUEST)
+		->getPacket();
+
+	LONGLONG startClock = clock();
+	pktCreator->setSeq(++seq);
+	BOOL sendSucc = sendICMP((sockaddr*)&dest, addrSize);
+	if (sendSucc)
+	{
+		res = (bool)recvPacket((sockaddr*)&dest, addrSize);
+		this->reply->time = (DWORD)((clock() - startClock) * 1000 / CLOCKS_PER_SEC);//毫秒时间
+	}
+	else
+	{
+		qDebug() << "send failed" << endl;
+	}
+	closesocket(sockRaw);
+	WSACleanup();
+	return res;
 }
 
 BOOL Ping::sendICMP(sockaddr * destaddr, int addrSize)

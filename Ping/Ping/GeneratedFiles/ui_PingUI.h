@@ -11,48 +11,56 @@
 
 #include <QtCore/QVariant>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QMainWindow>
-#include <QtWidgets/QMenuBar>
-#include <QtWidgets/QStatusBar>
-#include <QtWidgets/QToolBar>
-#include <QtWidgets/QWidget>
+#include <QtWidgets/QDialog>
+#include <QtWidgets/QHeaderView>
+#include <QtWidgets/QLabel>
+#include <QtWidgets/QLineEdit>
+#include <QtWidgets/QPushButton>
+#include <QtWidgets/QTableView>
 
 QT_BEGIN_NAMESPACE
 
 class Ui_PingUIClass
 {
 public:
-    QMenuBar *menuBar;
-    QToolBar *mainToolBar;
-    QWidget *centralWidget;
-    QStatusBar *statusBar;
+    QPushButton *button;
+    QLabel *topLable;
+    QLineEdit *input;
+    QLabel *middleLable;
+    QTableView *resTable;
 
-    void setupUi(QMainWindow *PingUIClass)
+    void setupUi(QDialog *PingUIClass)
     {
         if (PingUIClass->objectName().isEmpty())
             PingUIClass->setObjectName(QString::fromUtf8("PingUIClass"));
-        PingUIClass->resize(600, 400);
-        menuBar = new QMenuBar(PingUIClass);
-        menuBar->setObjectName(QString::fromUtf8("menuBar"));
-        PingUIClass->setMenuBar(menuBar);
-        mainToolBar = new QToolBar(PingUIClass);
-        mainToolBar->setObjectName(QString::fromUtf8("mainToolBar"));
-        PingUIClass->addToolBar(mainToolBar);
-        centralWidget = new QWidget(PingUIClass);
-        centralWidget->setObjectName(QString::fromUtf8("centralWidget"));
-        PingUIClass->setCentralWidget(centralWidget);
-        statusBar = new QStatusBar(PingUIClass);
-        statusBar->setObjectName(QString::fromUtf8("statusBar"));
-        PingUIClass->setStatusBar(statusBar);
+        PingUIClass->resize(400, 495);
+        button = new QPushButton(PingUIClass);
+        button->setObjectName(QString::fromUtf8("button"));
+        button->setGeometry(QRect(280, 60, 93, 31));
+        topLable = new QLabel(PingUIClass);
+        topLable->setObjectName(QString::fromUtf8("topLable"));
+        topLable->setGeometry(QRect(30, 10, 331, 21));
+        input = new QLineEdit(PingUIClass);
+        input->setObjectName(QString::fromUtf8("input"));
+        input->setGeometry(QRect(30, 60, 241, 31));
+        middleLable = new QLabel(PingUIClass);
+        middleLable->setObjectName(QString::fromUtf8("middleLable"));
+        middleLable->setGeometry(QRect(40, 110, 101, 21));
+        resTable = new QTableView(PingUIClass);
+        resTable->setObjectName(QString::fromUtf8("resTable"));
+        resTable->setGeometry(QRect(20, 150, 361, 331));
 
         retranslateUi(PingUIClass);
 
         QMetaObject::connectSlotsByName(PingUIClass);
     } // setupUi
 
-    void retranslateUi(QMainWindow *PingUIClass)
+    void retranslateUi(QDialog *PingUIClass)
     {
-        PingUIClass->setWindowTitle(QApplication::translate("PingUIClass", "PingUI", nullptr));
+        PingUIClass->setWindowTitle(QApplication::translate("PingUIClass", "Dialog", nullptr));
+        button->setText(QApplication::translate("PingUIClass", "\345\274\200\345\247\213", nullptr));
+        topLable->setText(QApplication::translate("PingUIClass", "\350\276\223\345\205\245\345\215\201\350\277\233\345\210\266\344\273\245\347\202\271\345\210\206\351\232\224ip,\347\202\271\345\207\273\346\214\211\351\222\256\345\274\200\345\247\213\347\273\223\346\235\237\346\220\234\347\264\242", nullptr));
+        middleLable->setText(QApplication::translate("PingUIClass", "\346\220\234\347\264\242\345\210\260\347\232\204\347\273\223\346\236\234:", nullptr));
     } // retranslateUi
 
 };

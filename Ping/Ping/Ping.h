@@ -64,12 +64,16 @@ public:
 	void init();
 	void ping(char *destIP, int count);
 	void ping(DWORD destIP,int count);
+	bool isReach(char *destIP);
+	bool isReach(DWORD destIP);
 	BOOL sendICMP(struct sockaddr* destaddr, int addrSize);
 	BOOL recvPacket(struct sockaddr* destaddr, int addrSize);
-	std::shared_ptr<PingReply> getReply() {
+	const std::shared_ptr<PingReply> getReply() {
 		return reply;
 	};
 	~Ping();
+
+
 private:
 	SOCKET sockRaw;
 	WSAEVENT event;
