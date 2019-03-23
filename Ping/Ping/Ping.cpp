@@ -1,6 +1,16 @@
 #include "Ping.h"
 USHORT Ping::seq = 0;
 #define block false;
+namespace ping {
+	constexpr auto DATASIZE = 32;
+	constexpr auto DATA = "abcdefghijklmnopqrstuvwabcdefghi";
+	constexpr auto ECHO_REQUEST = 8;
+	constexpr auto ECHO_REPLY = 0;
+	constexpr auto TIMEOUT = 1000;
+	constexpr auto MAXPACKETLEN = 256;
+	constexpr auto PORT = 1111;
+}
+
 Ping::Ping() :
 	icmpLen(sizeof(ICMPHead)+ping::DATASIZE)
 {
@@ -23,7 +33,6 @@ void Ping::init() throw(InitFailException)
 		qDebug() << "WSAStartup failed"<< endl;
 		throw InitFailException(QString((LONG)GetLastError()));
 	}
-
 	//SOCKET WSASocket(int af,int type,int protocol,LPWSAPROTOCOL_INFO lpProtocolInfo,
 	//	GROUP g,DWORD dwFlags);其功能都是创建一个原始套接字。
 	//af：[in]一个地址族规范。目前仅支持AF_INET格式，亦即ARPA Internet地址格式。
@@ -35,8 +44,9 @@ void Ping::init() throw(InitFailException)
 	//iFlags：套接口属性描述。
 	//@return:若无错误发生，WSASocket()返回新套接口的描述字。
 	//否则的话，返回 INVALID_SOCKET，应用程序可定调用WSAGetLastError()来获取相应的错误代码。
-	this->sockRaw = WSASocket(AF_INET, SOCK_RAW, IPPROTO_ICMP, NULL, 0, 0);
-	//this->sockRaw = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	//this->sockRaw = WSASocket(AF_INET, SOCK_RAW, IPPROTO_ICMP, NULL, 0, 0);
+
+	this->sockRaw = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if (this->sockRaw == INVALID_SOCKET)
 	{
 		qDebug() << "create socket failed" << endl;
@@ -44,7 +54,7 @@ void Ping::init() throw(InitFailException)
 	}
 	int bread = 0;
 
-#if 0		//部分机器上需要以下代码
+#if 1		//部分机器上需要以下代码
 	optVal = 1;
 	bread = setsockopt(sockRaw, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
 		(char *)&optVal, sizeof(optVal));
@@ -94,10 +104,12 @@ void Ping::ping(DWORD destIP,int count = 4)
 {
 	//配置socket
 	init();
-	sockaddr_in dest;
-	dest.sin_family = AF_INET;
-	dest.sin_addr.s_addr = destIP;
-	int addrSize = sizeof(dest);
+	sockaddr_in addr_in;
+	int addrSize = sizeof(addr_in);
+	memset(&addr_in, 0, addrSize);
+	addr_in.sin_family = AF_INET;
+	addr_in.sin_port = htons(ping::PORT);
+	addr_in.sin_addr.s_addr = destIP;
 	CurrentProcID = GetCurrentProcessId();
 
 	pktCreator
@@ -111,10 +123,10 @@ void Ping::ping(DWORD destIP,int count = 4)
 	while (count--) {
 		LONGLONG startClock = clock();
 		pktCreator->setSeq(++seq);
-		BOOL sendSucc = sendICMP((sockaddr*)&dest, addrSize);
+		BOOL sendSucc = sendICMP((sockaddr*)&addr_in, addrSize);
 		if (sendSucc)
 		{
-			recvPacket((sockaddr*)&dest, addrSize);
+			recvPacket((sockaddr*)&addr_in, addrSize);
 			this->reply->time = (DWORD)((clock() - startClock) * 1000 / CLOCKS_PER_SEC);//毫秒时间
 			this->reply->print();
 		}
@@ -123,7 +135,7 @@ void Ping::ping(DWORD destIP,int count = 4)
 			qDebug() << "send failed" << endl;
 			continue;
 		}
-		Sleep(1000);
+		Sleep(100);
 	}
 	closesocket(sockRaw);
 	WSACleanup();
@@ -138,10 +150,12 @@ bool Ping::isReach(DWORD destIP)
 {
 	bool res = false;
 	init();
-	sockaddr_in dest;
-	dest.sin_family = AF_INET;
-	dest.sin_addr.s_addr = destIP;
-	int addrSize = sizeof(dest);
+	sockaddr_in addr_in;
+	int addrSize = sizeof(addr_in);
+	memset(&addr_in, 0, addrSize);
+	addr_in.sin_family = AF_INET;
+	addr_in.sin_port = htons(ping::PORT);
+	addr_in.sin_addr.s_addr = destIP;
 	CurrentProcID = GetCurrentProcessId();
 
 	pktCreator
@@ -154,11 +168,12 @@ bool Ping::isReach(DWORD destIP)
 
 	LONGLONG startClock = clock();
 	pktCreator->setSeq(++seq);
-	BOOL sendSucc = sendICMP((sockaddr*)&dest, addrSize);
+	BOOL sendSucc = sendICMP((sockaddr*)&addr_in, addrSize);
 	if (sendSucc)
 	{
-		res = (bool)recvPacket((sockaddr*)&dest, addrSize);
+		res = (bool)recvPacket((sockaddr*)&addr_in, addrSize);
 		this->reply->time = (DWORD)((clock() - startClock) * 1000 / CLOCKS_PER_SEC);//毫秒时间
+		//reply->print();
 	}
 	else
 	{

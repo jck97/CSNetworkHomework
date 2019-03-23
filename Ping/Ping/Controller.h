@@ -4,16 +4,31 @@
 #include "PingArea.h"
 #include "PingUI.h"
 #include "ui_PingUI.h"
-class Controller
+#include <qobject.h>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+
+class Controller : public QObject
 {
+	Q_OBJECT
+
 public:
 	Controller();
 	~Controller();
-	void addItem(const DWORD &time, const DWORD &len, const DWORD &TTL);
 	void show();
 protected:
-	bool searching;
+	std::thread *t;
 	std::shared_ptr<PingArea> logic;
 	std::shared_ptr<PingUI> view;
+	void startSeaching();
+	void searchArea(const DWORD baseIP);
+	void reSearch();
+public slots:
+	void searchCtrl();//搜索控制函数。开始和暂停搜索，更换IP，等
+signals:
+	//PingReply的各个属性作为信号参数
+	void getRes(const char *IP, const unsigned int time,
+		const unsigned int len, const unsigned int TTL);
 };
 

@@ -4,15 +4,6 @@
 #include <memory>
 #include <ICMPPacketCreator.h>
 
-namespace ping {
-	constexpr auto DATASIZE = 32;
-	constexpr auto DATA = "abcdefghijklmnopqrstuvwabcdefghi";
-	constexpr auto ECHO_REQUEST = 8;
-	constexpr auto ECHO_REPLY = 0;
-	constexpr auto TIMEOUT = 1000;
-	constexpr auto MAXPACKETLEN = 256;
-
-}
 typedef struct
 {//不包含可选部分
 #ifdef RTP_BIG_ENDIAN
