@@ -1,6 +1,6 @@
 #include "Ping.h"
 USHORT Ping::seq = 0;
-#define block false;
+#define ublock false;
 namespace ping {
 	constexpr auto DATASIZE = 32;
 	constexpr auto DATA = "abcdefghijklmnopqrstuvwabcdefghi";
@@ -8,17 +8,19 @@ namespace ping {
 	constexpr auto ECHO_REPLY = 0;
 	constexpr auto TIMEOUT = 1000;
 	constexpr auto MAXPACKETLEN = 256;
-	constexpr auto PORT = 1111;
+	constexpr auto PORT = 25011;
 }
 
 Ping::Ping() :
 	icmpLen(sizeof(ICMPHead)+ping::DATASIZE)
 {
 	this->reply = std::make_shared<PingReply>();
-	this->pktCreator = std::make_shared<ICMPPacketCreator>(icmpLen);
+	this->pktCreator = std::make_unique<ICMPPacketCreator>(icmpLen);
+	init_socket();
+	init_packet();
 }
 
-void Ping::init() throw(InitFailException)
+void Ping::init_socket() throw(InitFailException)
 {
 	WSADATA wsaData;
 	int optVal = ping::TIMEOUT;
@@ -94,51 +96,35 @@ void Ping::init() throw(InitFailException)
 #endif
 }
 
+void Ping::init_packet()
+{
+	pktCreator->setProperty(
+		icmp_size{ sizeof(ICMPHead) + ping::DATASIZE },
+		icmp_code{ ping::ECHO_REQUEST },
+		icmp_data{ ping::DATA,ping::DATASIZE },
+		icmp_type{ ping::ECHO_REQUEST }
+	);
+}
+
 void Ping::ping(char * destIP,int count = 4)
 {
-	//qDebug() << inet_addr(destIP);
 	ping(inet_addr(destIP),count);
 }
 
 void Ping::ping(DWORD destIP,int count = 4)
 {
-	//配置socket
-	init();
-	sockaddr_in addr_in;
-	int addrSize = sizeof(addr_in);
-	memset(&addr_in, 0, addrSize);
-	addr_in.sin_family = AF_INET;
-	addr_in.sin_port = htons(ping::PORT);
-	addr_in.sin_addr.s_addr = destIP;
-	CurrentProcID = GetCurrentProcessId();
-
-	pktCreator
-		->setPktSize(sizeof(ICMPHead) + ping::DATASIZE)
-		->setCode(ping::ECHO_REQUEST)
-		->setData(ping::DATA, ping::DATASIZE)
-		->setId(CurrentProcID)
-		->setType(ping::ECHO_REQUEST)
-		->getPacket();
 
 	while (count--) {
-		LONGLONG startClock = clock();
-		pktCreator->setSeq(++seq);
-		BOOL sendSucc = sendICMP((sockaddr*)&addr_in, addrSize);
-		if (sendSucc)
+		if (isReach(destIP))
 		{
-			recvPacket((sockaddr*)&addr_in, addrSize);
-			this->reply->time = (DWORD)((clock() - startClock) * 1000 / CLOCKS_PER_SEC);//毫秒时间
-			this->reply->print();
+			reply->print();
 		}
 		else
 		{
-			qDebug() << "send failed" << endl;
-			continue;
+			qDebug() << "time out" << endl;
 		}
 		Sleep(100);
 	}
-	closesocket(sockRaw);
-	WSACleanup();
 }
 
 bool Ping::isReach(char * destIP)
@@ -149,38 +135,30 @@ bool Ping::isReach(char * destIP)
 bool Ping::isReach(DWORD destIP)
 {
 	bool res = false;
-	init();
 	sockaddr_in addr_in;
 	int addrSize = sizeof(addr_in);
 	memset(&addr_in, 0, addrSize);
 	addr_in.sin_family = AF_INET;
 	addr_in.sin_port = htons(ping::PORT);
 	addr_in.sin_addr.s_addr = destIP;
-	CurrentProcID = GetCurrentProcessId();
 
-	pktCreator
-		->setPktSize(sizeof(ICMPHead) + ping::DATASIZE)
-		->setCode(ping::ECHO_REQUEST)
-		->setData(ping::DATA, ping::DATASIZE)
-		->setId(CurrentProcID)
-		->setType(ping::ECHO_REQUEST)
-		->getPacket();
+	this->CurrentProcID = (USHORT)GetCurrentProcessId();
+	pktCreator->setProperty(
+		icmp_id{ (USHORT)CurrentProcID },
+		icmp_seq{ ++seq }
+	);
 
 	LONGLONG startClock = clock();
-	pktCreator->setSeq(++seq);
 	BOOL sendSucc = sendICMP((sockaddr*)&addr_in, addrSize);
 	if (sendSucc)
 	{
 		res = (bool)recvPacket((sockaddr*)&addr_in, addrSize);
 		this->reply->time = (DWORD)((clock() - startClock) * 1000 / CLOCKS_PER_SEC);//毫秒时间
-		//reply->print();
 	}
 	else
 	{
 		qDebug() << "send failed" << endl;
 	}
-	closesocket(sockRaw);
-	WSACleanup();
 	return res;
 }
 
@@ -199,14 +177,13 @@ BOOL Ping::sendICMP(sockaddr * destaddr, int addrSize)
 	//Flags 调用方式标志位, 一般为0, 改变Flags，将会改变Sendto发送的形式
 	//addr （可选）指针，指向目的套接字的地址
 	//addrLen 地址的长度
-	this->CurrentProcID = GetCurrentProcessId();
+
 	char* data = pktCreator->getPacket();
 	int bread = sendto(this->sockRaw, data, 
 		this->icmpLen,0, destaddr, addrSize);
 	if (bread == SOCKET_ERROR)
 	{
 		if (bread == WSAETIMEDOUT) {
-			//TODO();
 			qDebug() << "time out"  << endl;
 		}
 		qDebug()<<" error code : " << WSAGetLastError() << endl;
@@ -220,7 +197,7 @@ BOOL Ping::recvPacket(sockaddr * from, int fromlen)
 	BOOL res = TRUE;
 	char recvbuf[ping::MAXPACKETLEN];
 	int timeout = ping::TIMEOUT;
-#if block
+#if ublock
 	if (WSAWaitForMultipleEvents(1, &event, FALSE, timeout, FALSE) != WSA_WAIT_TIMEOUT) 
 	{
 		WSANETWORKEVENTS netEvent;
@@ -234,10 +211,10 @@ BOOL Ping::recvPacket(sockaddr * from, int fromlen)
 				res = FALSE;
 				if (WSAGetLastError() == WSAETIMEDOUT)
 				{
-					qDebug() << "time out" << endl;
+					qDebug() << "time out in thread:" << GetCurrentThreadId();
 					return res;
 				}
-				qDebug() << "revefrom() failed:" << WSAGetLastError() << endl;
+				qDebug() << "revefrom() failed id:" << WSAGetLastError() << endl;
 			}
 			else
 			{
@@ -252,7 +229,7 @@ BOOL Ping::recvPacket(sockaddr * from, int fromlen)
 					reply->TTL = ipHead->TTL;
 				}
 			}
-#if block
+#if ublock
 		}
 	}
 #endif
@@ -261,4 +238,6 @@ BOOL Ping::recvPacket(sockaddr * from, int fromlen)
 
 Ping::~Ping()
 {
+	closesocket(sockRaw);
+	WSACleanup();
 }

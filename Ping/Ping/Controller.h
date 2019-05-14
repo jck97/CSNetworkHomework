@@ -3,7 +3,6 @@
 
 #include "PingArea.h"
 #include "PingUI.h"
-#include "ui_PingUI.h"
 #include <qobject.h>
 #include <thread>
 #include <mutex>
@@ -19,13 +18,13 @@ public:
 	void show();
 protected:
 	std::thread *t;
-	std::shared_ptr<PingArea> logic;
-	std::shared_ptr<PingUI> view;
+	std::unique_ptr<PingArea> logic;
+	std::unique_ptr<PingUI> view;
 	void startSeaching();
 	void searchArea(const DWORD baseIP);
 	void reSearch();
 public slots:
-	void searchCtrl();//搜索控制函数。开始和暂停搜索，更换IP，等
+	void searchCtrl();//搜索控制函数。开始和暂停搜索，更换IP。点击按钮响应
 signals:
 	//PingReply的各个属性作为信号参数
 	void getRes(const char *IP, const unsigned int time,

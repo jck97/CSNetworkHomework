@@ -6,36 +6,57 @@
 //
 #define DTPCOP qDebug() << "undefined fuction!";\
 			   assert(0);return nullptr;
+
+template<typename childType>
 class PacketCreator
 {
 public:
-	PacketCreator();
-	int inline getPktSize() { return pktSize; }
+	explicit PacketCreator(int s) 
+		:pktSize(s)
+	{};
+
+	int getPktSize()const { return pktSize; }
 	virtual char* getPacket() { return packet; }
 	
-	virtual PacketCreator* setPktSize(int size);
-	virtual PacketCreator*  initPacket();
+	virtual void setPktSize(int s)
+	{
+		this->pktSize = s;
+	};
 
-//************* ICMP ************************************************************
-	virtual PacketCreator* setSeq(USHORT seq) { DTPCOP };
-	virtual PacketCreator* setType(BYTE type) { DTPCOP };
-	virtual PacketCreator* setCode(BYTE code) { DTPCOP };
-	virtual PacketCreator* setId(USHORT id) { DTPCOP };
-	virtual PacketCreator* setData(const char *data, int len) { DTPCOP };
-//************ end ICMP ********************************************************
+	virtual void initPacket()
+	{
+		if (pktSize > 0)
+		{
+			if (packet != nullptr)
+			{
+				delete[] packet;
+			}
+			packet = new char[pktSize];
+		}
+	};
 
+	template<typename T>
+	void setProperty(T&& ppy)
+	{
+		static_cast<childType*>(this)->setProperty(std::forward<T>(ppy));
+	}
 
-/***method of some other protocol
-to add other protocol serporrt,
-add some functions,or override some functions;
-************************************/
+	template<typename T,typename... Args>
+	void setProperty(T&& ppy,Args&&... res_ppy)
+	{
+		static_cast<childType*>(this)->setProperty(std::forward<T>(ppy));
+		this->setProperty(std::forward<Args>(res_ppy)...);
+	}
 
-	~PacketCreator();
+	virtual ~PacketCreator()
+	{
+		if (packet != nullptr)
+			delete[] packet;
+	};
+
 protected:
-	USHORT checkSum(const USHORT* packet,int n);
 	char* packet;
 	int pktSize;
-private:
 };
 
 class InitPacketFailExceptiom {
@@ -45,3 +66,5 @@ public:
 	}
 	QString info;
 };
+
+USHORT check_sum(const char *chars, int n);

@@ -33,11 +33,11 @@ void PingUI::addItem(const char *IP, const unsigned int time,
 	table->setItem(rows, 0, new QTableWidgetItem(IP));
 	table->setItem(rows, 1, new QTableWidgetItem(QString::number(time)));
 	table->setItem(rows, 2, new QTableWidgetItem(QString::number(len)));
-	table->setItem(rows, 3, new QTableWidgetItem(
-		QString::number(TTL)));
+	table->setItem(rows, 3, new QTableWidgetItem(QString::number(TTL)));
 }
 
 void PingUI::winInfo(QString info)
 {
-	QMessageBox::information(this, "information", info, QMessageBox::Ok, QMessageBox::Cancel);
+	QMessageBox::information(this, "information", info, 
+		QMessageBox::Ok, QMessageBox::Cancel);
 }

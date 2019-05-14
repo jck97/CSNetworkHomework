@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/ospf_ui">
+        <file alias="rtIcon">rt.jpg</file>
+    </qresource>
+</RCC>

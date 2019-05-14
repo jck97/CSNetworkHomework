@@ -26,3 +26,8 @@ stdafx.cpp
 targetver.h
 StdAfx.h
 StdAfx.cpp
+
+#
+*.tlog
+*.obj
+*.log

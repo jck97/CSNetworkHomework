@@ -7,13 +7,13 @@ namespace ctrlpm //全局变量，用于线程协调
 	bool isSearching = false;//开始暂停搜索
 	DWORD baseIP = 0;
 	bool stop = false;//结束搜索
-	constexpr auto range = 64;
-	constexpr auto maxRange = 255;
+	constexpr auto range4Thread = 64;
+	constexpr auto IPRange = 256;
 };
 
 Controller::Controller():
-	logic(std::move(std::make_shared<PingArea>())),
-	view(std::move(std::make_shared<PingUI>()))
+	logic(std::move(std::make_unique<PingArea>())),
+	view(std::move(std::make_unique<PingUI>()))
 {
 	QObject::connect(this, &Controller::getRes, 
 		view.get(), &PingUI::addItem);
@@ -28,7 +28,7 @@ Controller::~Controller()
 		ctrlpm::stop = true;
 		ctrlpm::isSearching = true;
 		ctrlpm::cv.notify_all();
-		for (size_t i = 0; i < ctrlpm::maxRange/ctrlpm::range; i++)
+		for (size_t i = 0; i < ctrlpm::IPRange/ctrlpm::range4Thread; i++)
 		{
 			//联结线程
 			if (t[i].joinable())
@@ -42,14 +42,14 @@ Controller::~Controller()
 
 void Controller::startSeaching()
 {
-	auto thread_size = ctrlpm::maxRange / ctrlpm::range;
+	auto thread_size = ctrlpm::IPRange / ctrlpm::range4Thread;
 	t = new std::thread[thread_size];
 	for (size_t i = 0; i < thread_size; i++)
 	{
 #ifdef RTP_BIG_ENDIAN//大端机与小端机ip的计算有点差别
-		int baseip = ctrlpm::baseIP + i * ctrlpm::range;
+		int baseip = ctrlpm::baseIP + i * ctrlpm::range4Thread;
 #else  
-		int baseip = ctrlpm::baseIP + i * ctrlpm::range*(1<<24);
+		int baseip = ctrlpm::baseIP + i * ctrlpm::range4Thread*(1<<24);
 #endif
 		t[i] = std::thread(
 			[this,baseip]() {this->searchArea(baseip); }
@@ -66,9 +66,7 @@ void Controller::searchCtrl()
 	strIP += ".0";
 	auto inputIP = inet_addr(strIP.toStdString().c_str());
 	if (inputIP == INADDR_NONE) {
-		//输入IP不可用，不停止但是阻塞
-		ctrlpm::stop = false;
-		ctrlpm::isSearching = false;
+		//输入IP不可用，没有开启线程
 		view->winInfo(QString("get error ip,try again!"));
 	}
 	else if(ctrlpm::baseIP == 0)
@@ -78,7 +76,7 @@ void Controller::searchCtrl()
 		ctrlpm::stop = false;
 		ctrlpm::isSearching = true;
 		view->winInfo(QString("searching: ip from ") 
-			+ strIP +QString(" \nto ")+ view->ui.input->text()+".225");
+			+ strIP +QString(" \nto ")+ view->ui.input->text()+".255");
 		startSeaching();
 		view->ui.button->setText("暂停");
 	}
@@ -87,10 +85,10 @@ void Controller::searchCtrl()
 		//更换了目标IP，不停止，不阻塞
 		ctrlpm::stop = false;
 		ctrlpm::isSearching = true;
-		view->ui.resTable->clear();
+		view->ui.resTable->setRowCount(0);
 		ctrlpm::baseIP = inputIP;
 		reSearch();
-		view->winInfo(QString("searching: ip from ")
+		view->winInfo(QString("searching ip from ")
 			+ strIP + QString(" \nto ") + view->ui.input->text() + ".225");
 	}
 	else
@@ -116,27 +114,27 @@ void Controller::searchArea(const DWORD baseIP)
 	u_long ip;
 	in_addr in;
 	memset((char*)&in, 0, sizeof(in));
-	while (!ctrlpm::stop && i++ <ctrlpm::range) {
+	while (!ctrlpm::stop && i++ <ctrlpm::range4Thread) {
 #ifdef RTP_BIG_ENDIAN   //BE   大端机与小端机ip的计算有点差别
 		ip = baseIP + i;
 #else					//LE
 		ip = (DWORD)(baseIP + (i << 24));
 #endif
+		//仅仅为了实现暂停功能，需要进一步优化
+		std::unique_lock<std::mutex> lck(ctrlpm::mtx);
+		ctrlpm::cv.wait(lck, []() {return ctrlpm::isSearching; });
+		lck.unlock();
+		ctrlpm::cv.notify_all();
+
 		if (checker.isReach(ip))
 		{
 			auto rpy = checker.getReply();
 			in.S_un.S_addr = ip;
-			std::unique_lock<std::mutex> lck(ctrlpm::mtx);
-			ctrlpm::cv.wait(lck, []() {return ctrlpm::isSearching; });
-			qDebug()<<"ip: "<< inet_ntoa(in)<<" "; rpy->print();
-			emit getRes(inet_ntoa(in), 
+			qDebug() << "ip: " << inet_ntoa(in) << " "; rpy->print();
+			emit getRes(inet_ntoa(in),
 				rpy->time, rpy->dataLen, rpy->TTL);
-			lck.unlock();
-			ctrlpm::cv.notify_all();
-			qDebug() << GetCurrentProcessId() << endl;
 		}
 	}
-	qDebug() << "quit search" << GetCurrentProcessId() << endl;
 }
 
 void Controller::reSearch()
@@ -148,7 +146,7 @@ void Controller::reSearch()
 		ctrlpm::isSearching = true;
 		Sleep(1010);
 		ctrlpm::cv.notify_all();
-		auto thread_size = ctrlpm::maxRange / ctrlpm::range;
+		auto thread_size = ctrlpm::IPRange / ctrlpm::range4Thread;
 		for (size_t i = 0; i < thread_size; i++)
 		{
 			if (t[i].joinable())

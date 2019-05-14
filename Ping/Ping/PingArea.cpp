@@ -9,7 +9,6 @@ PingArea::PingArea(DWORD _baseIP):
 {
 }
 
-
 PingArea::~PingArea()
 {
 }

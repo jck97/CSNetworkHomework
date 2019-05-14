@@ -1,22 +1,26 @@
 #pragma comment(lib, "WS2_32")
 #include "Controller.h"
-#define TestGUI
 #include <thread>
+
+//#define TestGUI
+#define TestPing
+
 #ifdef TestGUI
 #include <QtWidgets/QApplication>
-#include <iostream>
-#endif // PGUI
+#endif // TestGUI
+
 int main(int argc, char *argv[])
 {
 #ifdef TestGUI
 	QApplication a(argc, argv);
 	Controller c;
 	c.show();
-#endif // DEBUG
-
-	//Ping p;
-	//p.isReach("114.114.114.0");
-#ifdef TestGUI
 	a.exec();
-#endif // DEBUG
+#endif // TestGUI
+
+#ifdef TestPing
+	Ping p;
+	p.ping("111.161.64.48", 4);
+	qDebug() << sizeof(USHORT);
+#endif // TestPing
 }
