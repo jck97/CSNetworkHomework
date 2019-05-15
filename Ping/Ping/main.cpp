@@ -2,8 +2,8 @@
 #include "Controller.h"
 #include <thread>
 
-//#define TestGUI
-#define TestPing
+#define TestGUI
+//#define TestPing
 
 #ifdef TestGUI
 #include <QtWidgets/QApplication>
@@ -21,6 +21,5 @@ int main(int argc, char *argv[])
 #ifdef TestPing
 	Ping p;
 	p.ping("111.161.64.48", 4);
-	qDebug() << sizeof(USHORT);
 #endif // TestPing
 }

@@ -9,8 +9,9 @@ ICMPPacketCreator::ICMPPacketCreator(int size)
 
 char * ICMPPacketCreator::getPacket()
 {
+	//计算校验和之前，必须把相应的位置置为0.
+	icmpHead->checkSum = 0;
 	icmpHead->checkSum = check_sum(packet, pktSize);
-	qDebug() << "check sum:" << icmpHead->checkSum;
 	return packet;
 }
 
